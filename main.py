@@ -499,4 +499,5 @@ if __name__ == "__main__":
    except KeyboardInterrupt:
        print("\nОстановка бота по запросу пользователя")
    except Exception as e:
+
        print(f"Критическая ошибка: {e}")
