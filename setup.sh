@@ -135,8 +135,41 @@ echo
 print_status "INFO" "Проверяем конфигурацию перед созданием сервиса..."
 echo "Директория бота: $BOT_DIR"
 echo "Python путь: $PYTHON_CMD"
-echo "Файл main.py: $(ls -la "$BOT_DIR/main.py" 2>/dev/null || echo 'НЕ НАЙДЕН')"
-echo "Файл config.py: $(ls -la "$BOT_DIR/config.py" 2>/dev/null || echo 'НЕ НАЙДЕН')"
+echo "Пользователь сервиса: $REAL_USER"
+echo
+
+# Проверяем доступность файлов для пользователя
+print_status "INFO" "Проверка доступности файлов для пользователя $REAL_USER..."
+
+if sudo -u "$REAL_USER" test -r "$BOT_DIR/main.py"; then
+    print_status "OK" "main.py доступен для чтения"
+else
+    print_status "ERROR" "main.py недоступен для пользователя $REAL_USER"
+    exit 1
+fi
+
+if sudo -u "$REAL_USER" test -r "$BOT_DIR/config.py"; then
+    print_status "OK" "config.py доступен для чтения"
+else
+    print_status "ERROR" "config.py недоступен для пользователя $REAL_USER"
+    exit 1
+fi
+
+if sudo -u "$REAL_USER" test -x "$BOT_DIR"; then
+    print_status "OK" "Директория доступна для выполнения"
+else
+    print_status "ERROR" "Директория недоступна для пользователя $REAL_USER"
+    exit 1
+fi
+
+# Тестовый запуск
+print_status "INFO" "Тестовый запуск бота..."
+if sudo -u "$REAL_USER" timeout 5s "$PYTHON_CMD" -c "import sys; sys.path.insert(0, '$BOT_DIR'); import config" 2>/dev/null; then
+    print_status "OK" "Конфигурация загружается корректно"
+else
+    print_status "WARN" "Возможны проблемы с конфигурацией"
+fi
+
 echo
 read -p "Продолжить создание сервиса? (y/N): " continue_setup
 if [[ ! $continue_setup =~ ^[Yy]$ ]]; then
@@ -185,9 +218,6 @@ SyslogIdentifier=rental-production
 
 # Безопасность
 NoNewPrivileges=true
-ProtectSystem=strict
-ProtectHome=true
-ReadWritePaths=$BOT_DIR
 
 [Install]
 WantedBy=multi-user.target
@@ -209,6 +239,15 @@ print_status "OK" "Systemd daemon перезагружен"
 # Включение автозапуска
 systemctl enable "$SERVICE_NAME"
 print_status "OK" "Автозапуск включен"
+
+# Проверка созданного сервиса
+print_status "INFO" "Проверка созданного сервиса..."
+if systemctl list-unit-files | grep -q "$SERVICE_NAME"; then
+    print_status "OK" "Сервис зарегистрирован в systemd"
+else
+    print_status "ERROR" "Сервис не найден в systemd"
+    exit 1
+fi
 
 echo
 print_box "УСТАНОВКА ЗАВЕРШЕНА"
